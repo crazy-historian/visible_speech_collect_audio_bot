@@ -25,6 +25,8 @@ class Form(StatesGroup):
     hearing_degree = State()
     consent = State()
     assignment = State()
+     audio = State()
+    
 
 
 # Хэндлер на команду /start
@@ -64,17 +66,19 @@ async def cancel_handler(message: types.Message,  state: FSMContext):
 @dp.message(F.text == "📝 Заполнить анкету")
 async def start_questionnaire(message: types.Message, state: FSMContext):
     await state.set_state(Form.age)
-    await message.answer("Сколько вам лет?", reply_markup=types.ReplyKeyboardRemove())
+    await message.answer("Сколько вам полных лет?", reply_markup=types.ReplyKeyboardRemove())
 
 # Обработчик возраста
 @dp.message(Form.age)
 async def process_age(message: types.Message, state: FSMContext):
 
     try:
+        print(f'введен возраст: {message.text}, int это {int(message.text)}')
         age = int(message.text)
         if age < 1 or age > 120:
             raise ValueError
         await state.update_data(age=age)
+      
         await state.set_state(Form.gender)
         
         gender_keyboard = types.ReplyKeyboardMarkup(
@@ -143,7 +147,6 @@ async def process_hearing_degree(message: types.Message, state: FSMContext):
 
 async def finish_questionnaire(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    await state.clear()
     
     response = (
         "Спасибо за анкету! Ваши данные:\n"
@@ -186,21 +189,44 @@ async def process_consent(message: types.Message, state: FSMContext):
         return
     
     data = await state.get_data()
-    age = data.get('age', 0)
+    print(data)
     
     if message.text == "✅ Даю согласие":
-        # Логика для подтверждения согласия
-        await message.answer("✅ Спасибо! Ваши данные приняты.", reply_markup=types.ReplyKeyboardRemove())
+        await state.set_state(Form.assignment)
+        keyboard = types.ReplyKeyboardMarkup(
+            keyboard=[[types.KeyboardButton(text="📩 Получить задание")]],
+            resize_keyboard=True
+        )
+        await message.answer(
+            "🎉 Отлично! Хотите получить текст для записи?",
+            reply_markup=keyboard
+        )
         
-        # Здесь можно добавить сохранение данных в облако
-        # и обработку для несовершеннолетних
-        if age < 18:
+        # Для несовершеннолетних
+        if data['age'] < 18:
             await message.answer("📞 Мы свяжемся с вашим законным представителем для подтверждения.")
             
     else:
         await message.answer("❌ Согласие не получено. Все данные будут удалены.", reply_markup=types.ReplyKeyboardRemove())
+        await state.clear()
+
+# Обработчик получения задания
+@dp.message(Form.assignment)
+@dp.message(F.text == "📩 Получить задание")
+async def send_assignment(message: types.Message, state: FSMContext):
+    # Текст для чтения (можно вынести в отдельный файл)
+    assignment_text = (
+        "Пожалуйста, прочитайте вслух следующий текст:\n\n"
+        "«Наука - это организованное знание. "
+        "Мудрость - это организованная жизнь.»\n\n"
+        "Сделайте запись голосовым сообщением."
+    )
     
-    await state.clear()
+    await message.answer(
+        assignment_text,
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await state.clear()  # Или перейти в новое состояние для обработки аудио
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
