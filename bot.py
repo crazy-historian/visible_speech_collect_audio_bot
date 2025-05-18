@@ -24,6 +24,7 @@ class Form(StatesGroup):
     hearing_issue = State()
     hearing_degree = State()
     consent = State()
+    assignment = State()
 
 
 # Хэндлер на команду /start
@@ -154,7 +155,52 @@ async def finish_questionnaire(message: types.Message, state: FSMContext):
     if data.get('hearing_degree'):
         response += f"\nСтепень нарушения: {data['hearing_degree']}"
     
-    await message.answer(response, reply_markup=types.ReplyKeyboardRemove())
+    await message.answer(response)
+    
+    # Переходим к этапу согласия
+    await state.set_state(Form.consent)
+    
+    # Формируем текст согласия в зависимости от возраста
+    age = data.get('age', 0)
+    if age < 18:
+        consent_text = "⚠️ Для участия необходимо согласие родителя/опекуна!\nПожалуйста, подтвердите согласие:"
+    else:
+        consent_text = "🔒 Пожалуйста, подтвердите ваше согласие на обработку персональных данных:"
+    
+    # Создаем клавиатуру для согласия
+    consent_keyboard = types.ReplyKeyboardMarkup(
+        keyboard=[
+            [types.KeyboardButton(text="✅ Даю согласие")],
+            [types.KeyboardButton(text="❌ Отказаться")]
+        ],
+        resize_keyboard=True
+    )
+    
+    await message.answer(consent_text, reply_markup=consent_keyboard)
+
+# Обработчик согласия
+@dp.message(Form.consent)
+async def process_consent(message: types.Message, state: FSMContext):
+    if message.text not in ["✅ Даю согласие", "❌ Отказаться"]:
+        await message.answer("Пожалуйста, используйте кнопки для ответа!")
+        return
+    
+    data = await state.get_data()
+    age = data.get('age', 0)
+    
+    if message.text == "✅ Даю согласие":
+        # Логика для подтверждения согласия
+        await message.answer("✅ Спасибо! Ваши данные приняты.", reply_markup=types.ReplyKeyboardRemove())
+        
+        # Здесь можно добавить сохранение данных в облако
+        # и обработку для несовершеннолетних
+        if age < 18:
+            await message.answer("📞 Мы свяжемся с вашим законным представителем для подтверждения.")
+            
+    else:
+        await message.answer("❌ Согласие не получено. Все данные будут удалены.", reply_markup=types.ReplyKeyboardRemove())
+    
+    await state.clear()
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
