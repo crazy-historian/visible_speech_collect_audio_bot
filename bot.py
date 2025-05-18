@@ -25,7 +25,7 @@ class Form(StatesGroup):
     hearing_degree = State()
     consent = State()
     assignment = State()
-     audio = State()
+    audio = State()
     
 
 
@@ -226,7 +226,34 @@ async def send_assignment(message: types.Message, state: FSMContext):
         assignment_text,
         reply_markup=types.ReplyKeyboardRemove()
     )
-    await state.clear()  # Или перейти в новое состояние для обработки аудио
+    await state.set_state(Form.audio)  # Переходим в состояние ожидания аудио
+
+# Новый обработчик для аудио сообщений
+@dp.message(Form.audio, F.voice)
+async def process_audio(message: types.Message, state: FSMContext):
+    voice = message.voice
+    duration = voice.duration  # Получаем длительность аудио
+    
+    # Mock-обработка: просто показываем информацию
+    await message.answer(
+        f"✅ Аудио получено!\n"
+        f"Длительность: {duration} секунд\n"
+        f"Формат: .ogg\n"
+        f"Размер: {voice.file_size // 1024} КБ"
+    )
+    
+    # Здесь будет логика сохранения аудио
+    await state.clear()
+
+# Обработчик для ЛЮБЫХ других сообщений в состоянии audio
+@dp.message(Form.audio)
+async def handle_wrong_content(message: types.Message):
+    # Удаляем предыдущую клавиатуру
+    await message.answer(
+        "⚠️ Пожалуйста, отправьте именно голосовое сообщение!\n"
+        "Используйте иконку микрофона в приложении.",
+        reply_markup=types.ReplyKeyboardRemove()
+)
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
